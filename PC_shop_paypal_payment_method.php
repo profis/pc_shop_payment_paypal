@@ -45,6 +45,7 @@ class PC_shop_paypal_payment_method extends PC_shop_payment_method {
 	
 	
 	public function make_online_payment() {
+		$this->debug('paypal: make_online_payment()', 2);
 		//$this->debug($this->_order_data);
 		$params = array(
 			'notify_url' => $this->_get_callback_url(),
@@ -62,7 +63,7 @@ class PC_shop_paypal_payment_method extends PC_shop_payment_method {
 			'PAYMENTREQUEST_0_NOTIFYURL' => $this->_get_callback_url(),
 			'CALLBACKTIMEOUT' => 3,
 			'REQCONFIRMSHIPPING' => 0,
-			'NOSHIPPING' => 1,
+			
 			'ADDROVERRIDE' => 0,
 			'ALLOWNOTE' => 0,
 			
@@ -113,6 +114,12 @@ class PC_shop_paypal_payment_method extends PC_shop_payment_method {
 		$params['PAYMENTREQUEST_0_NOTIFYURL'] = $this->_get_callback_url();
 		//$params['PAYMENTREQUEST_0_NOTIFY_URL'] = $this->_get_callback_url();
 		
+		if ($this->_order_data['total_price'] > $sum) {
+			$params['PAYMENTREQUEST_0_SHIPPINGAMT'] = $this->_order_data['total_price'] - $sum;
+		}
+		else {
+			$params['NOSHIPPING'] = 1;
+		}
 		
 		
 //		if ($order['cycle'] > 0) {
@@ -120,7 +127,12 @@ class PC_shop_paypal_payment_method extends PC_shop_payment_method {
 //			$params['L_BILLINGAGREEMENTDESCRIPTION0'] = $desc;
 //		}
 		//print_pre($params);
+		
+		$this->debug('api params were built', 3);
+		
 		$resp = $this->apiCall('SetExpressCheckout', $params);
+		
+		$this->debug('api was called', 3);
 		
 		if ($this->_debug_api) {
 			$this->debug('Paypal api response:', 2);
@@ -132,6 +144,7 @@ class PC_shop_paypal_payment_method extends PC_shop_payment_method {
 		//header("Location: {$this->webUrl}?" . http_build_query($p));
 		
 		if (isset($resp['ACK']) && $resp['ACK'] == 'Success') {
+			$this->debug('response success, will set order token', 3);
 			$this->token = $resp['TOKEN'];
 			$url = $this->webUrl.'?cmd=_express-checkout&token='.$this->token;
 			$order_model = new PC_shop_order_model();
@@ -144,6 +157,8 @@ class PC_shop_paypal_payment_method extends PC_shop_payment_method {
 			//trace($resp);
 			//trace($this->conf);
 		}
+		
+		$this->debug('return nothing', 3);
 		
 		return array(null, null);
 	}

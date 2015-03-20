@@ -45,8 +45,6 @@ class PC_shop_paypal_payment_method extends PC_shop_payment_method {
 	
 	
 	public function make_online_payment() {
-		$this->debug('paypal: make_online_payment()', 2);
-		//$this->debug($this->_order_data);
 		$params = array(
 			'notify_url' => $this->_get_callback_url(),
 			//"cmd" =>"_cart",
@@ -128,23 +126,12 @@ class PC_shop_paypal_payment_method extends PC_shop_payment_method {
 //		}
 		//print_pre($params);
 		
-		$this->debug('api params were built', 3);
-		
 		$resp = $this->apiCall('SetExpressCheckout', $params);
-		
-		$this->debug('api was called', 3);
-		
-		if ($this->_debug_api) {
-			$this->debug('Paypal api response:', 2);
-			$this->debug($resp, 2);
-		}
-		
-		
+
 		//exit;
 		//header("Location: {$this->webUrl}?" . http_build_query($p));
 		
 		if (isset($resp['ACK']) && $resp['ACK'] == 'Success') {
-			$this->debug('response success, will set order token', 3);
 			$this->token = $resp['TOKEN'];
 			$url = $this->webUrl.'?cmd=_express-checkout&token='.$this->token;
 			$order_model = new PC_shop_order_model();
@@ -157,8 +144,6 @@ class PC_shop_paypal_payment_method extends PC_shop_payment_method {
 			//trace($resp);
 			//trace($this->conf);
 		}
-		
-		$this->debug('return nothing', 3);
 		
 		return array(null, null);
 	}
@@ -179,11 +164,7 @@ class PC_shop_paypal_payment_method extends PC_shop_payment_method {
 		$p['PWD']		= $this->_payment_data['payment_key'];
 		$p['SIGNATURE']	= $this->cfg['pc_shop_payment_paypal']['paypal_signature'];
 		$p['VERSION']	= self::API_VERSION;
-		if (false and $this->_debug_api) {
-			$this->debug('Paypal params:', 2);
-			$this->debug($p, 2);
-		}
-		
+
 		$p = $this->urlParamsToString($p);
 		$resp = $this->httpRequest($this->apiUrl.($p ? "?{$p}" : ''));
 		$f = $this->urlParamsToArray($resp['body']);
@@ -193,7 +174,6 @@ class PC_shop_paypal_payment_method extends PC_shop_payment_method {
 	
 	
 	public function accept() {
-		$this->debug('accept()');
 		$payment_succesful = false;
 		$response = array();
 		try {
@@ -202,10 +182,6 @@ class PC_shop_paypal_payment_method extends PC_shop_payment_method {
 				$token = urldecode($_REQUEST['token']);
 
 				$resp = $this->apiCall('GetExpressCheckoutDetails', array('TOKEN' => $token));
-				if ($this->_debug_api) {
-					$this->debug('$resp from GetExpressCheckoutDetails', 2);
-					$this->debug($resp, 2);
-				}
 				if (isset($resp['ACK']) && $resp['ACK'] == 'Success' && $token == $resp['TOKEN']) {
 					$order_model = new PC_shop_order_model();
 					$order_data = $order_model->get_one(array(
@@ -224,29 +200,16 @@ class PC_shop_paypal_payment_method extends PC_shop_payment_method {
 							'TOKEN' => $resp['TOKEN'],
 							'PAYMENTREQUEST_0_NOTIFYURL' => $this->_get_callback_url()
 						);
-						if (false) {
-							$this->debug('$do_express_params', 2);
-							$this->debug($do_express_params, 2);
-						}
-						
+
 						$resp = $this->apiCall('DoExpressCheckoutPayment', $do_express_params);
-						if ($this->_debug_api) {
-							$this->debug('$resp from DoExpressCheckoutPayment', 2);
-							$this->debug($resp, 2);
-						}
 
 						if (isset($resp['ACK']) && $resp['ACK'] == 'Success' && $token == $resp['TOKEN']) {
-							$this->debug(':) Saving transaction id', 2);
 							$order_model->update(array('transaction_id' => $resp['PAYMENTINFO_0_TRANSACTIONID']), $order_data['id']);
-							$this->debug(':) Successful response', 2);
 							$response = $resp;
 						}
 					}
 					
 				}
-			}
-			if ($this->_debug_api) {
-				$this->debug($response, 1);
 			}
 			$this->_response = $response;
 			
@@ -279,22 +242,15 @@ class PC_shop_paypal_payment_method extends PC_shop_payment_method {
 	
 	public function callback() {
 		$logf = 2;
-		$this->debug('paypal callback()');
-		
+
 		$req_ = array('cmd' => '_notify-validate');
 		$req = array_merge($req_, $_POST);
 		
 		if (!$this->_is_test() && $req['test_ipn']) {
-			$this->debug(':( Test mode not allowed', $logf);
 			return false;
 		}
 		
 		if ($req['receiver_email'] != $this->cfg['pc_shop_payment_paypal']['paypal_email']) {
-			if ($this->_debug_api) {
-				$this->debug('Request:', 1);
-				$this->debug($req, 1);
-			}
-			$this->debug(':( Wrong receiver, that\'s not me ('.$this->cfg['pc_shop_payment_paypal']['paypal_email'].').', $logf);
 			return false;
 		}
 		
@@ -307,21 +263,13 @@ class PC_shop_paypal_payment_method extends PC_shop_payment_method {
 		$payment_currency = self::gvv('mc_currency', $_POST);
 		$txn_id = self::gvv('txn_id', $_POST);
 	
-		if ($this->_debug_api) {
-			$this->debug('Request:', $logf);
-			$this->debug($req, $logf);
-		}
 		//self::debugLog($resp, $logf);
 	
 		if ($resp['http_code'] != 200) { // HTTP ERROR
-			$this->debug('Error: HTTP response '.$resp['http_code'].' problems...', $logf);
 			return null;
 		}
-		
-		$this->debug('Verif response: '.$resp['body'], $logf);
-		
+
 		if ($resp['body'] == 'VERIFIED') {
-			$this->debug('VERIFIED', $logf);
 			// Also might check that txn_id has not been previously processed
 			// Also might check that payment_amount/payment_currency are correct
 			
@@ -335,36 +283,27 @@ class PC_shop_paypal_payment_method extends PC_shop_payment_method {
 			
 			if (empty($this->_order_data)) {
 				//DB does not contains info about a currently received IPN...
-				$this->debug('Error: invalid transaction...', $logf);
 				return false;
 			}
 			
-			$this->debug('Payment Status: '.$payment_status, $logf);
 			if ($payment_status == 'Completed') {
 				if ($this->_is_order_paid() == 1) {
-					$this->debug('Error: Order alredy completed!!!', $logf);
 					return false;
 				}
 				if (!$this->_get_order_total_price() || $this->_get_order_total_price() != $payment_amount) {
-					$this->debug('Error: Transactions amounts NOT MATCH!!!', $logf);
 					return false;
 				}
 				if (!$this->_get_order_currency() || $this->_get_order_currency() != $payment_currency) {
-					$this->debug('Error: Transactions currency NOT MATCH!!!', $logf);
 					return false;
 				}
 				//$order_model->update(array('is_paid' => 1), $this->_order_data['id']);
-				$this->debug('OK', $logf);
 				return true;
 			} else if ($payment_status == 'Reversed') {
 				$order_model->update(array('is_paid' => 0), $this->_order_data['id']);
 				return false;
-			} else {
-				$this->debug("Warning: Unhandled Status '$payment_status'", $logf);
 			}
 		}
 		else if ($resp['body'] == 'INVALID') {
-			$this->debug('INVALID', $logf);
 			return null;
 		}
 		
